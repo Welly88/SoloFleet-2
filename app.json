@@ -1,0 +1,55 @@
+{
+  "expo": {
+    "name": "Solo Fleet Development",
+    "slug": "solofleet",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/soloo.png",
+    "scheme": "exponativewind",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/images/soloo.png",
+        "monochromeImage": "./assets/images/soloo.png"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/soloo.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/solo.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff",
+          "dark": {
+            "backgroundColor": "#000000"
+          }
+        }
+      ],
+      "expo-font",
+      "expo-web-browser",
+      "@react-native-community/datetimepicker"
+    ],
+    "experiments": {
+      "typedRoutes": false,
+      "reactCompiler": false
+    },
+    "extra": {
+      "defaultAppIconSet": true,
+      "selectedIconUrl": "https://sqgedrruthtbkskkjeqa.supabase.co/storage/v1/object/public/projects/dcf2d89c-1967-4d29-9b21-135487f98529/fs/assets/images/icon.png?t=1778653918017"
+    }
+  }
+}
