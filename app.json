@@ -2,16 +2,19 @@
   "expo": {
     "name": "Solo Fleet Development",
     "slug": "solofleet",
+    "owner": "solo-lmp",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/soloo.png",
-    "scheme": "exponativewind",
+    "scheme": "Solo-Fleet",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.solofleet.solofleet-2"
     },
     "android": {
+      "package": "com.solofleet.solofleet",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/soloo.png",
@@ -30,7 +33,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/solo.png",
+          "image": "./assets/images/soloo.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",
@@ -49,7 +52,11 @@
     },
     "extra": {
       "defaultAppIconSet": true,
-      "selectedIconUrl": "https://sqgedrruthtbkskkjeqa.supabase.co/storage/v1/object/public/projects/dcf2d89c-1967-4d29-9b21-135487f98529/fs/assets/images/icon.png?t=1778653918017"
+      "selectedIconUrl": "https://sqgedrruthtbkskkjeqa.supabase.co/storage/v1/object/public/projects/dcf2d89c-1967-4d29-9b21-135487f98529/fs/assets/images/icon.png?t=1778653918017",
+      "router": {},
+      "eas": {
+        "projectId": "05d5c3f4-b558-4696-8387-60b8b7d4243c"
+      }
     }
   }
 }

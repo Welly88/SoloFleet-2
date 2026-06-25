@@ -13,9 +13,9 @@ import {
   Keyboard,
   ScrollView,
   Modal,
+  TextInput,
 } from "react-native";
 import { WebView } from "react-native-webview";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import { getVehicleData, logout, getCompanyId } from "./api/auth";
 import Sidebar from "./Sidebar";
@@ -124,10 +124,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onLogout }) => {
     };
   }, [userCompanyId]);
 
-  // --- Logika Filter Utama ---
   useEffect(() => {
     let result = data;
-
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
       result = result.filter(
@@ -136,35 +134,28 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onLogout }) => {
           item.vehicleid?.toLowerCase().includes(term),
       );
     }
-
     if (selectedEngines.length > 0) {
       result = result.filter((item) => {
         const status = parseInt(String(item.IP1), 10) === 1 ? "on" : "off";
         return selectedEngines.includes(status);
       });
     }
-
     if (selectedTemps.length > 0) {
       result = result.filter((item) => {
         const t1 =
           item.temp1 != null ? parseFloat(String(item.temp1)) : Infinity;
         const t2 =
           item.temp2 != null ? parseFloat(String(item.temp2)) : Infinity;
-
         if (t1 === Infinity && t2 === Infinity) return false;
-
         const minTemp = Math.min(t1, t2);
         let category = "";
-
-        if (minTemp > -15) category = "frozen";
-        else if (minTemp >= -15 && minTemp <= 0) category = "cold";
-        else if (minTemp > 0 && minTemp <= 15) category = "cool";
+        if (minTemp <= -15) category = "frozen";
+        else if (minTemp >= -14 && minTemp <= -1) category = "cold";
+        else if (minTemp >= 0 && minTemp <= 10) category = "cool";
         else category = "warm";
-
         return selectedTemps.includes(category);
       });
     }
-
     setFilteredData(result);
   }, [data, searchTerm, selectedEngines, selectedTemps]);
 
@@ -177,7 +168,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onLogout }) => {
       setter([]);
       return;
     }
-
     if (stateArray.includes(value)) {
       setter(stateArray.filter((item) => item !== value));
     } else {
@@ -233,26 +223,21 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onLogout }) => {
         const lat = getSafeCoord(item.latitude ?? item.lat);
         const lng = getSafeCoord(item.longitude ?? item.lng);
         if (lat === null || lng === null) return null;
-
-        const engineStatus = parseInt(String(item.IP1), 10) || 0;
-        const speed = parseFloat(String(item.speed)) || 0;
-        const t1 = getSafeCoord(item.temp1);
-        const t2 = getSafeCoord(item.temp2);
-
         return {
           id: item.vehicleid,
           lat,
           lng,
           label: item.alias || item.vehicleid,
-          engine: engineStatus,
-          speed: speed,
-          temp1: t1,
-          temp2: t2,
+          engine: parseInt(String(item.IP1), 10) || 0,
+          speed: parseFloat(String(item.speed)) || 0,
+          temp1: getSafeCoord(item.temp1),
+          temp2: getSafeCoord(item.temp2),
         };
       })
       .filter((marker): marker is MapMarker => Boolean(marker));
   };
 
+  // === HTML PETA: BADAN = SUHU, HIGHLIGHT PULSE = ENGINE/JALAN ===
   const leafletHtml = `
 <!DOCTYPE html>
 <html>
@@ -264,93 +249,136 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onLogout }) => {
   html, body { margin:0; padding:0; overflow:hidden; }
   #map { width:100vw; height:100vh; }
   .leaflet-control-attribution { display:none!important; }
-  .marker-container { display: flex; justify-content: center; align-items: center; width: 32px; height: 32px; }
-  .marker-dot {
-  width: 14px;
-  height: 14px;
-  background-color: #EF4444;
-  border-radius: 50%;
-  box-shadow: 0 0 3px rgba(0,0,0,0.5);
-}
-  .layer-container { position:absolute; bottom:90px; right:15px; z-index:9999; }
-  .layer-fab { width:50px; height:50px; border:none; border-radius:50%; background:white; font-size:22px; box-shadow: 0 4px 12px rgba(0,0,0,.2); }
-  .layer-menu { display:none; flex-direction:column; gap:8px; position:absolute; bottom:65px; right:0; background:white; border-radius:16px; padding:10px; box-shadow: 0 6px 18px rgba(0,0,0,.15); min-width:130px; }
+  .leaflet-control-zoom { display:none!important; }
+  .marker-wrapper { display:flex; justify-content:center; align-items:center; width:32px; height:32px; position:relative; }
+  .marker-pulse { position:absolute; width:32px; height:32px; border-radius:50%; animation:pulse 2.5s ease-out infinite; }
+  
+  /* Warna Highlight Pulse berdasarkan Status */
+  .marker-pulse.moving { background:rgba(34,197,94,0.4); } /* Hijau: Sedang Jalan */
+  .marker-pulse.idle { background:rgba(245,158,11,0.3); }   /* Kuning: Engine ON tapi diam */
+  .marker-pulse.off { background:rgba(239,68,68,0.3); }     /* Merah: Engine OFF */
+  
+  @keyframes pulse { 0%{transform:scale(1);opacity:0.7;} 100%{transform:scale(2.5);opacity:0;} }
+  
+  .layer-container { position:absolute; bottom:20px; right:15px; z-index:9999; }
+  .layer-fab { width:42px; height:42px; border:none; border-radius:14px; background:rgba(255,255,255,0.97); font-size:18px; box-shadow:0 2px 12px rgba(0,0,0,.15); display:flex; align-items:center; justify-content:center; cursor:pointer; }
+  .layer-menu { display:none; flex-direction:column; gap:6px; position:absolute; bottom:52px; right:0; background:rgba(255,255,255,0.98); border-radius:14px; padding:10px; box-shadow:0 4px 24px rgba(0,0,0,.12); min-width:150px; backdrop-filter:blur(10px); }
   .layer-menu.show { display:flex; }
-  .layer-option { display:flex; align-items:center; gap:10px; padding:4px; }
-  .layer-option img { width:38px; height:38px; border-radius:10px; border: 1px solid #eee; object-fit:cover; }
-  .layer-option span { font-size:12px; font-weight:600; color:#333; }
+  .layer-option { display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:10px; cursor:pointer; transition:background 0.2s; }
+  .layer-option:active { background:rgba(0,0,0,0.05); }
+  .layer-option.active { background:rgba(37,99,235,0.08); }
+  .layer-option img { width:36px; height:36px; border-radius:8px; border:1px solid rgba(0,0,0,0.08); object-fit:cover; }
+  .layer-option span { font-size:12px; font-weight:600; color:#374151; }
+  .layer-option.active span { color:#2563EB; }
 </style>
 </head>
 <body>
 <div id="map"></div>
 <div class="layer-container">
-    <div id="layerMenu" class="layer-menu">
-        <div class="layer-option" onclick="setLayer('street'); toggleLayerMenu();"><img src="https://tile.openstreetmap.org/6/53/34.png"/><span>Default</span></div>
-        <div class="layer-option" onclick="setLayer('satellite'); toggleLayerMenu();"><img src="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/6/53/34"/><span>Satellite</span></div>
+  <div id="layerMenu" class="layer-menu">
+    <div class="layer-option active" id="opt-standard" onclick="setLayer('standard');toggleLayerMenu();">
+      <img src="https://tile.openstreetmap.org/6/53/34.png"/><span>Standard</span>
     </div>
-    <button class="layer-fab" onclick="toggleLayerMenu()">🗺️</button>
+    <div class="layer-option" id="opt-voyager" onclick="setLayer('voyager');toggleLayerMenu();">
+      <img src="https://basemaps.cartocdn.com/rastertiles/voyager/6/53/34.png"/><span>Voyager</span>
+    </div>
+    <div class="layer-option" id="opt-satellite" onclick="setLayer('satellite');toggleLayerMenu();">
+      <img src="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/6/53/34"/><span>Satellite</span>
+    </div>
+  </div>
+  <button class="layer-fab" onclick="toggleLayerMenu()">🗺️</button>
 </div>
 <script>
-var street = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
-var satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}');
-var map = L.map('map', { zoomControl:false, attributionControl:false, preferCanvas:true, layers:[street] }).setView([-2.5,118],5);
-var current="street";
+var standardLayer=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19});
+var voyagerLayer=L.tileLayer('https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{maxZoom:19});
+var satelliteLayer=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:18});
+var map=L.map('map',{zoomControl:false,attributionControl:false,preferCanvas:true,layers:[standardLayer]}).setView([-2.5,118],5);
+var current="standard";
+var allLayers={standard:standardLayer,voyager:voyagerLayer,satellite:satelliteLayer};
+function toggleLayerMenu(){document.getElementById('layerMenu').classList.toggle('show');}
+function setLayer(type){if(current===type)return;map.removeLayer(allLayers[current]);map.addLayer(allLayers[type]);current=type;document.querySelectorAll('.layer-option').forEach(function(el){el.classList.remove('active');});var optEl=document.getElementById('opt-'+type);if(optEl)optEl.classList.add('active');}
+var markersLayer=L.layerGroup().addTo(map);
 
-function toggleLayerMenu(){ document.getElementById('layerMenu').classList.toggle('show'); }
-function setLayer(type){
-  if(current===type) return;
-  map.removeLayer(street); map.removeLayer(satellite);
-  if(type==="street") map.addLayer(street);
-  if(type==="satellite") map.addLayer(satellite);
-  current=type;
+// === ICON SEGITIGA (Warna diambil dari parameter SUHU) ===
+function getTriangleSvg(color) {
+  var shadow = '<polygon points="16,3 28,27 16,22 4,27" fill="rgba(0,0,0,0.2)" transform="translate(1, 1)"/>';
+  var main = '<polygon points="16,2 28,26 16,21 4,26" fill="' + color + '" stroke="white" stroke-width="2" stroke-linejoin="round"/>';
+  var shine = '<polygon points="16,6 22,22 16,19 10,22" fill="rgba(255,255,255,0.15)"/>';
+  return '<svg width="32" height="30" viewBox="0 0 32 30" fill="none" xmlns="http://www.w3.org/2000/svg">' + shadow + main + shine + '</svg>';
 }
 
-var markersLayer = L.layerGroup().addTo(map);
-
-function getArrowSvg(color) {
-  return '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L4 20H12H20L12 2Z" fill="' + color + '" stroke="white" stroke-width="1"/></svg>';
+// === ICON BULAT (Warna diambil dari parameter SUHU) ===
+function getDotSvg(color) {
+  var shadow = '<circle cx="16.8" cy="16.8" r="7" fill="rgba(0,0,0,0.15)"/>';
+  var main = '<circle cx="16" cy="16" r="7" fill="' + color + '" stroke="white" stroke-width="2"/>';
+  var inner = '<circle cx="16" cy="16" r="3" fill="rgba(255,255,255,0.25)"/>';
+  return '<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">' + shadow + main + inner + '</svg>';
 }
 
-window.updateMarkers = function(data){
+window.updateMarkers=function(data){
   markersLayer.clearLayers();
   data.forEach(function(v){
-    if(!v.lat || !v.lng) return;
+    if(!v.lat||!v.lng)return;
     
-    var htmlContent = '';
-    var isMoving = v.speed > 0 && v.engine === 1;
+    var isEngineOn = v.engine === 1;
+    var isMoving = v.speed > 0 && isEngineOn;
     
-    if (!isMoving) {
-   htmlContent = '<div class="marker-container"><div class="marker-dot"></div></div>';
-} else {
-   var t1 = v.temp1;
-   var t2 = v.temp2;
-   var color = '#16A34A';
-   var hasTemp = (t1 !== null && t1 !== undefined) || (t2 !== null && t2 !== undefined);
-   
-   if (hasTemp) {
-       var val1 = (t1 !== null && t1 !== undefined) ? t1 : 999; 
-       var val2 = (t2 !== null && t2 !== undefined) ? t2 : 999;
-       var minTemp = Math.min(val1, val2);
-       
-       if (minTemp < -15) color = '#1E3A8A';
-       else if (minTemp >= -15 && minTemp <= 0) color = '#3B82F6';
-       else if (minTemp > 0 && minTemp <= 15) color = '#16A34A';
-       else color = '#16A34A';
-   }
-   htmlContent = '<div class="marker-container">' + getArrowSvg(color) + '</div>';
-}
+    // 1. HITUNG WARNA SUHU (INI JADI WARNA BADAN MARKER)
+    var t1 = v.temp1;
+    var t2 = v.temp2;
+    var hasTemp = (t1 !== null && t1 !== undefined) || (t2 !== null && t2 !== undefined);
+    var tempColor = '#9CA3AF'; // Default Abu jika tidak ada data suhu
+    
+    if (hasTemp) {
+      var minTemp = Math.min(
+        (t1 !== null && t1 !== undefined) ? t1 : 999,
+        (t2 !== null && t2 !== undefined) ? t2 : 999
+      );
+      
+      if (minTemp <= -15) {
+        tempColor = '#1E3A8A'; // Biru Tua (-30 s/d -15)
+      } else if (minTemp >= -14 && minTemp <= -1) {
+        tempColor = '#60A5FA'; // Biru Muda (-14 s/d -1)
+      } else if (minTemp >= 0 && minTemp <= 10) {
+        tempColor = '#15803D'; // Hijau Tua (0 s/d 10)
+      } else {
+        tempColor = '#F59E0B'; // Orange (> 10)
+      }
+    }
 
-    var myIcon = L.divIcon({ className: 'my-custom-icon', html: htmlContent, iconSize: [32, 32], iconAnchor: [16, 16] });
-    L.marker([v.lat, v.lng], { icon: myIcon }).addTo(markersLayer).on('click', function(){
-      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'SELECT_VEHICLE', id: v.id }));
+    // 2. TENTUKAN HIGHLIGHT PULSE (INI UNTUK MENANDAI SEDANG JALAN / ENGINE)
+    var pulseHtml = '';
+    if (isMoving) {
+      pulseHtml = '<div class="marker-pulse moving"></div>'; // Highlight Hijau: Sedang Jalan
+    } else if (isEngineOn) {
+      pulseHtml = '<div class="marker-pulse idle"></div>'; // Highlight Kuning: Engine ON tapi diam
+    } else {
+      pulseHtml = '<div class="marker-pulse off"></div>'; // Highlight Merah: Engine OFF
+    }
+
+    // 3. GAMBAR MARKER (Bentuk segitiga/bulat dipakai warna Suhu)
+    var svgHtml = isMoving ? getTriangleSvg(tempColor) : getDotSvg(tempColor);
+    var htmlContent = '<div class="marker-wrapper">' + pulseHtml + svgHtml + '</div>';
+    
+    var myIcon = L.divIcon({
+      className: 'my-custom-icon',
+      html: htmlContent,
+      iconSize: [32, 32],
+      iconAnchor: [16, 16]
     });
+
+    L.marker([v.lat, v.lng], { icon: myIcon })
+      .addTo(markersLayer)
+      .on('click', function() {
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'SELECT_VEHICLE', id: v.id }));
+      });
   });
 };
-window.panTo = function(lat, lng){ if(lat && lng){ map.setView([lat, lng], 16, { animate:true }); } };
+
+window.panTo=function(lat,lng){if(lat&&lng){map.setView([lat,lng],16,{animate:true});}};
 </script>
 </body>
-</html>
-`;
+</html>`;
 
   const handleWebViewMessage = (event: { nativeEvent: { data: string } }) => {
     try {
@@ -380,6 +408,7 @@ window.panTo = function(lat, lng){ if(lat && lng){ map.setView([lat, lng], 16, {
   const handleSelectVehicle = (item: Vehicle) => {
     Keyboard.dismiss();
     setSelectedVehicleId(item.vehicleid);
+    setShowVehicleDropdown(false);
     const lat = getSafeCoord(item.latitude ?? item.lat);
     const lng = getSafeCoord(item.longitude ?? item.lng);
     if (lat !== null && lng !== null && webViewRef.current) {
@@ -393,20 +422,143 @@ window.panTo = function(lat, lng){ if(lat && lng){ map.setView([lat, lng], 16, {
 
   const getEngineStatus = (ip1: any) => {
     const val = parseInt(String(ip1), 10);
-    if (val === 1) return { text: "ON", color: "#16A34A" };
-    return { text: "OFF", color: "#DC2626" };
+    if (val === 1) return { text: "ON", color: "#22C55E" };
+    return { text: "OFF", color: "#EF4444" };
   };
 
   const getDoorStatus = (door: any) => {
     if (door === null || door === undefined || door === "")
       return { text: "-", color: "#6B7280" };
     const value = String(door).trim();
-    if (value.includes("1")) return { text: "OPEN", color: "#DC2626" };
-    if (/^0+$/.test(value)) return { text: "CLOSED", color: "#16A34A" };
+    if (value.includes("1")) return { text: "OPEN", color: "#EF4444" };
+    if (/^0+$/.test(value)) return { text: "CLOSED", color: "#22C55E" };
     return { text: "-", color: "#6B7280" };
   };
 
   const c = (val: any) => val || "-";
+
+  const renderNavbar = () => (
+    <View style={styles.navbar}>
+      <TouchableOpacity
+        style={styles.burgerBtn}
+        onPress={() => setIsSidebarOpen(true)}
+      >
+        <Feather name="menu" size={18} color="#374151" />
+      </TouchableOpacity>
+      <View style={styles.vehicleSelectorContainer}>
+        <TouchableOpacity
+          style={styles.vehicleSelectorBtn}
+          onPress={() => setShowVehicleDropdown(!showVehicleDropdown)}
+        >
+          <Feather name="truck" size={14} color="#9CA3AF" />
+          <Text style={styles.vehicleSelectorText} numberOfLines={1}>
+            {selectedVehicle
+              ? selectedVehicle.alias || selectedVehicle.vehicleid
+              : "Pilih Kendaraan"}
+          </Text>
+          <Feather
+            name={showVehicleDropdown ? "chevron-up" : "chevron-down"}
+            size={14}
+            color="#D1D5DB"
+          />
+        </TouchableOpacity>
+      </View>
+      <TouchableOpacity
+        style={[
+          styles.filterBtn,
+          (selectedEngines.length > 0 || selectedTemps.length > 0) &&
+            styles.filterBtnActive,
+        ]}
+        onPress={() => setIsFilterModalVisible(true)}
+      >
+        <Feather
+          name="sliders"
+          size={16}
+          color={
+            selectedEngines.length > 0 || selectedTemps.length > 0
+              ? "white"
+              : "#9CA3AF"
+          }
+        />
+      </TouchableOpacity>
+    </View>
+  );
+
+  const renderVehicleDropdown = () => {
+    if (!showVehicleDropdown) return null;
+    return (
+      <View style={styles.vehicleDropdown}>
+        <View style={styles.searchContainer}>
+          <Feather name="search" size={14} color="#D1D5DB" />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Cari kendaraan..."
+            placeholderTextColor="#D1D5DB"
+            value={searchTerm}
+            onChangeText={setSearchTerm}
+            autoCorrect={false}
+          />
+          {searchTerm.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchTerm("")}>
+              <Feather name="x" size={14} color="#D1D5DB" />
+            </TouchableOpacity>
+          )}
+        </View>
+        <FlatList
+          data={filteredData}
+          keyExtractor={(item) => item.vehicleid}
+          style={styles.dropdownList}
+          nestedScrollEnabled
+          keyboardShouldPersistTaps="handled"
+          renderItem={({ item }) => {
+            const isSelected = selectedVehicleId === item.vehicleid;
+            const engineStatus = getEngineStatus(item.IP1);
+            return (
+              <TouchableOpacity
+                style={[
+                  styles.dropdownItem,
+                  isSelected && styles.dropdownItemSelected,
+                ]}
+                onPress={() => handleSelectVehicle(item)}
+              >
+                <View
+                  style={[
+                    styles.engineDot,
+                    { backgroundColor: engineStatus.color },
+                  ]}
+                />
+                <View style={styles.dropdownItemContent}>
+                  <Text
+                    style={[
+                      styles.dropdownItemTitle,
+                      isSelected && styles.dropdownItemTitleSelected,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {item.alias || item.vehicleid}
+                  </Text>
+                  <Text style={styles.dropdownItemSub} numberOfLines={1}>
+                    {item.vehicleid}
+                  </Text>
+                </View>
+                {isSelected && (
+                  <Feather name="check" size={14} color="#2563EB" />
+                )}
+              </TouchableOpacity>
+            );
+          }}
+          ListEmptyComponent={
+            <View style={styles.emptyDropdown}>
+              <Feather name="x-circle" size={28} color="#E5E7EB" />
+              <Text style={styles.emptyDropdownText}>
+                Kendaraan tidak ditemukan
+              </Text>
+            </View>
+          }
+        />
+      </View>
+    );
+  };
 
   const renderContent = () => {
     if (activeMenu !== "dashboard") {
@@ -425,12 +577,9 @@ window.panTo = function(lat, lng){ if(lat && lng){ map.setView([lat, lng], 16, {
     }
 
     return (
-      <View
-        style={[
-          styles.dashboardContainer,
-          { flexDirection: isLandscape ? "row" : "column" },
-        ]}
-      >
+      <View style={styles.dashboardContainer}>
+        {renderNavbar()}
+        {renderVehicleDropdown()}
         <View
           style={[
             styles.mapWrapper,
@@ -450,197 +599,151 @@ window.panTo = function(lat, lng){ if(lat && lng){ map.setView([lat, lng], 16, {
             renderLoading={() => (
               <View style={styles.mapLoading}>
                 <ActivityIndicator color="#2563EB" size="large" />
-                <Text style={{ marginTop: 10, color: "#2563EB" }}>
+                <Text style={{ marginTop: 8, color: "#9CA3AF", fontSize: 12 }}>
                   Memuat Peta...
                 </Text>
               </View>
             )}
           />
-
-          <View style={styles.floatingButtonsContainer}>
-            <TouchableOpacity
-              style={styles.floatingMenuBtn}
-              onPress={() => setIsSidebarOpen(true)}
-            >
-              <Text style={styles.floatingMenuIcon}>☰</Text>
-            </TouchableOpacity>
-
-            {/* UBAH: Menggunakan Feather Icon */}
-            <TouchableOpacity
-              style={[
-                styles.floatingMenuBtn,
-                { marginTop: 10 },
-                (selectedEngines.length > 0 || selectedTemps.length > 0) &&
-                  styles.filterActiveBtn,
-              ]}
-              onPress={() => setIsFilterModalVisible(true)}
-            >
-              <Feather
-                name="filter"
-                size={24}
-                color={
-                  selectedEngines.length > 0 || selectedTemps.length > 0
-                    ? "white"
-                    : "#111827"
-                }
-              />
-            </TouchableOpacity>
-          </View>
-
           {selectedVehicle && (
-            <View style={styles.bottomPopupContainer}>
-              <View style={styles.dropdownContainer}>
-                <TouchableOpacity
-                  style={styles.dropdownButton}
-                  onPress={() => setShowVehicleDropdown(!showVehicleDropdown)}
+            <>
+              <TouchableOpacity
+                style={styles.popupDismissArea}
+                activeOpacity={1}
+                onPress={() => setSelectedVehicleId(null)}
+              />
+              <View style={styles.bottomPopupContainer}>
+                <View style={styles.popupHandle}>
+                  <View style={styles.popupHandleBar} />
+                </View>
+                <ScrollView
+                  style={styles.popupScroll}
+                  contentContainerStyle={styles.popupContent}
+                  showsVerticalScrollIndicator={false}
                 >
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      width: "100%",
-                    }}
-                  >
-                    <View>
-                      <Text style={styles.dropdownText}>
-                        {selectedVehicle.alias || selectedVehicle.vehicleid}
-                      </Text>
-                      <Text
+                  <View style={styles.popupHeader}>
+                    <View style={styles.popupTitleContainer}>
+                      <View
                         style={[
-                          styles.engineBadge,
-                          { color: getEngineStatus(selectedVehicle.IP1).color },
-                        ]}
-                      >
-                        {getEngineStatus(selectedVehicle.IP1).text}
-                      </Text>
-                    </View>
-                    <Text style={{ fontSize: 16 }}>
-                      {showVehicleDropdown ? "▲" : "▼"}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-
-                {showVehicleDropdown && (
-                  <FlatList
-                    data={filteredData}
-                    keyExtractor={(item) => item.vehicleid}
-                    style={styles.dropdownList}
-                    nestedScrollEnabled
-                    renderItem={({ item }) => (
-                      <TouchableOpacity
-                        style={[
-                          styles.dropdownItem,
-                          selectedVehicleId === item.vehicleid && {
-                            backgroundColor: "#EFF6FF",
+                          styles.popupEngineIndicator,
+                          {
+                            backgroundColor: getEngineStatus(
+                              selectedVehicle.IP1,
+                            ).color,
                           },
                         ]}
-                        onPress={() => {
-                          handleSelectVehicle(item);
-                          setShowVehicleDropdown(false);
-                        }}
+                      />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.popupTitle} numberOfLines={1}>
+                          {selectedVehicle.alias || "No Name"}
+                        </Text>
+                        <Text style={styles.popupSub}>
+                          {selectedVehicle.vehicleid}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                  <View style={styles.popupDetails}>
+                    <View style={styles.detailGrid2x2}>
+                      <View
+                        style={[styles.detailCard, styles.detailCardTopLeft]}
                       >
-                        <Text style={styles.dropdownItemTitle}>
-                          {item.alias || item.vehicleid}
+                        <Feather name="cpu" size={16} color="#9CA3AF" />
+                        <Text style={styles.detailLabel}>Engine</Text>
+                        <Text
+                          style={[
+                            styles.detailValue,
+                            {
+                              color: getEngineStatus(selectedVehicle.IP1).color,
+                            },
+                          ]}
+                        >
+                          {getEngineStatus(selectedVehicle.IP1).text}
                         </Text>
-                        <Text style={styles.dropdownItemSub}>
-                          {item.vehicleid}
+                      </View>
+                      <View
+                        style={[styles.detailCard, styles.detailCardTopRight]}
+                      >
+                        <Feather
+                          name={
+                            getDoorStatus(selectedVehicle.door).text === "OPEN"
+                              ? "alert-circle"
+                              : "check-circle"
+                          }
+                          size={16}
+                          color="#9CA3AF"
+                        />
+                        <Text style={styles.detailLabel}>Door</Text>
+                        <Text
+                          style={[
+                            styles.detailValue,
+                            {
+                              color: getDoorStatus(selectedVehicle.door).color,
+                            },
+                          ]}
+                        >
+                          {getDoorStatus(selectedVehicle.door).text}
                         </Text>
-                      </TouchableOpacity>
-                    )}
-                  />
-                )}
+                      </View>
+                      <View
+                        style={[styles.detailCard, styles.detailCardBottomLeft]}
+                      >
+                        <Feather name="thermometer" size={16} color="#9CA3AF" />
+                        <Text style={styles.detailLabel}>Temp 1</Text>
+                        <Text style={styles.detailValue}>
+                          {getSafeCoord(selectedVehicle.temp1) !== null
+                            ? `${getSafeCoord(selectedVehicle.temp1)?.toFixed(1)}°`
+                            : "-"}
+                        </Text>
+                      </View>
+                      <View
+                        style={[
+                          styles.detailCard,
+                          styles.detailCardBottomRight,
+                        ]}
+                      >
+                        <Feather name="thermometer" size={16} color="#9CA3AF" />
+                        <Text style={styles.detailLabel}>Temp 2</Text>
+                        <Text style={styles.detailValue}>
+                          {getSafeCoord(selectedVehicle.temp2) !== null
+                            ? `${getSafeCoord(selectedVehicle.temp2)?.toFixed(1)}°`
+                            : "-"}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={styles.locationInfo}>
+                      <View style={styles.locationRow}>
+                        <Feather name="map-pin" size={13} color="#D1D5DB" />
+                        <Text style={styles.locationText} numberOfLines={2}>
+                          {c(selectedVehicle.stn) ||
+                            c(selectedVehicle.dnm) ||
+                            c(selectedVehicle.subd) ||
+                            "-"}
+                        </Text>
+                      </View>
+                      <View style={styles.locationRow}>
+                        <Feather name="home" size={13} color="#D1D5DB" />
+                        <Text style={styles.locationText} numberOfLines={1}>
+                          {c(selectedVehicle.City)}
+                          {selectedVehicle.City && selectedVehicle.Province
+                            ? ", "
+                            : ""}
+                          {c(selectedVehicle.Province)}
+                        </Text>
+                      </View>
+                      <View style={styles.speedRow}>
+                        <Feather name="activity" size={13} color="#D1D5DB" />
+                        <Text style={styles.speedText}>
+                          {selectedVehicle.speed || 0} km/h
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                </ScrollView>
               </View>
-
-              <ScrollView
-                style={styles.popupScroll}
-                contentContainerStyle={styles.popupContent}
-              >
-                <View style={styles.popupHeader}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.popupTitle} numberOfLines={1}>
-                      {selectedVehicle.alias || "No Name"}
-                    </Text>
-                    <Text style={styles.popupSub}>
-                      {selectedVehicle.vehicleid}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.popupDetails}>
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Engine</Text>
-                    <Text
-                      style={[
-                        styles.detailValue,
-                        {
-                          color: getEngineStatus(selectedVehicle.IP1).color,
-                          fontWeight: "bold",
-                        },
-                      ]}
-                    >
-                      {getEngineStatus(selectedVehicle.IP1).text}
-                    </Text>
-                  </View>
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Temp 1</Text>
-                    <Text style={styles.detailValue}>
-                      {getSafeCoord(selectedVehicle.temp1) !== null
-                        ? `${getSafeCoord(selectedVehicle.temp1)?.toFixed(1)} °C`
-                        : "-"}
-                    </Text>
-                  </View>
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Temp 2</Text>
-                    <Text style={styles.detailValue}>
-                      {getSafeCoord(selectedVehicle.temp2) !== null
-                        ? `${getSafeCoord(selectedVehicle.temp2)?.toFixed(1)} °C`
-                        : "-"}
-                    </Text>
-                  </View>
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Door</Text>
-                    <Text
-                      style={[
-                        styles.detailValue,
-                        { color: getDoorStatus(selectedVehicle.door).color },
-                      ]}
-                    >
-                      {getDoorStatus(selectedVehicle.door).text}
-                    </Text>
-                  </View>
-                  <View style={styles.separatorLine} />
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Street Name</Text>
-                    <Text style={styles.detailValue}>
-                      {c(selectedVehicle.stn)}
-                    </Text>
-                  </View>
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>City</Text>
-                    <Text style={styles.detailValue}>
-                      {c(selectedVehicle.City)}
-                    </Text>
-                  </View>
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Province</Text>
-                    <Text style={styles.detailValue}>
-                      {c(selectedVehicle.Province)}
-                    </Text>
-                  </View>
-                  <View style={styles.separatorLine} />
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Speed</Text>
-                    <Text style={styles.detailValue}>
-                      {selectedVehicle.speed || 0} km/h
-                    </Text>
-                  </View>
-                </View>
-              </ScrollView>
-            </View>
+            </>
           )}
         </View>
-
         {isTableVisible && (
           <View
             style={
@@ -675,11 +778,18 @@ window.panTo = function(lat, lng){ if(lat && lng){ map.setView([lat, lng], 16, {
 
   const renderTableItem: ListRenderItem<Vehicle> = ({ item }) => {
     const isSelected = selectedVehicleId === item.vehicleid;
+    const engineStatus = getEngineStatus(item.IP1);
     return (
       <TouchableOpacity
         style={[styles.tableRow, isSelected && styles.tableRowSelected]}
         onPress={() => handleSelectVehicle(item)}
       >
+        <View
+          style={[
+            styles.tableEngineDot,
+            { backgroundColor: engineStatus.color },
+          ]}
+        />
         <View style={styles.tableCellMain}>
           <Text
             style={[styles.tableCellTitle, styles.textDark]}
@@ -689,6 +799,7 @@ window.panTo = function(lat, lng){ if(lat && lng){ map.setView([lat, lng], 16, {
           </Text>
           <Text style={styles.tableCellSub}>{item.vehicleid}</Text>
         </View>
+        <Text style={styles.tableSpeed}>{item.speed || 0} km/h</Text>
       </TouchableOpacity>
     );
   };
@@ -704,7 +815,6 @@ window.panTo = function(lat, lng){ if(lat && lng){ map.setView([lat, lng], 16, {
   return (
     <View style={styles.container}>
       {renderContent()}
-
       <Sidebar
         visible={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
@@ -712,7 +822,6 @@ window.panTo = function(lat, lng){ if(lat && lng){ map.setView([lat, lng], 16, {
         onMenuSelect={(id: string) => setActiveMenu(id)}
         onLogout={handleLogout}
       />
-
       <Modal
         animationType="fade"
         transparent={true}
@@ -729,72 +838,44 @@ window.panTo = function(lat, lng){ if(lat && lng){ map.setView([lat, lng], 16, {
             onStartShouldSetResponder={() => true}
           >
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Filter Vehicle</Text>
+              <Text style={styles.modalTitle}>Filter Kendaraan</Text>
               <TouchableOpacity onPress={() => setIsFilterModalVisible(false)}>
-                <Feather name="x-circle" size={28} color="#9CA3AF" />
+                <Feather name="x" size={20} color="#D1D5DB" />
               </TouchableOpacity>
             </View>
-
-            <ScrollView>
+            <ScrollView showsVerticalScrollIndicator={false}>
               <Text style={styles.filterSectionTitle}>Status Engine</Text>
               <View style={styles.filterOptionsRow}>
-                <TouchableOpacity
-                  style={[
-                    styles.filterChip,
-                    selectedEngines.length === 0 && styles.filterChipActive,
-                  ]}
-                  onPress={() => setSelectedEngines([])}
-                >
-                  <Text
+                {[
+                  { key: "all", label: "Semua", value: [] },
+                  { key: "on", label: "Engine ON", value: ["on"] },
+                  { key: "off", label: "Engine OFF", value: ["off"] },
+                ].map((opt) => (
+                  <TouchableOpacity
+                    key={opt.key}
                     style={[
-                      styles.filterChipText,
-                      selectedEngines.length === 0 &&
-                        styles.filterChipTextActive,
+                      styles.filterChip,
+                      (opt.key === "all"
+                        ? selectedEngines.length === 0
+                        : selectedEngines.includes(opt.key)) &&
+                        styles.filterChipActive,
                     ]}
+                    onPress={() => setSelectedEngines(opt.value as string[])}
                   >
-                    Semua
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.filterChip,
-                    selectedEngines.includes("on") && styles.filterChipActive,
-                  ]}
-                  onPress={() =>
-                    toggleFilter(selectedEngines, "on", setSelectedEngines)
-                  }
-                >
-                  <Text
-                    style={[
-                      styles.filterChipText,
-                      selectedEngines.includes("on") &&
-                        styles.filterChipTextActive,
-                    ]}
-                  >
-                    Engine ON
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.filterChip,
-                    selectedEngines.includes("off") && styles.filterChipActive,
-                  ]}
-                  onPress={() =>
-                    toggleFilter(selectedEngines, "off", setSelectedEngines)
-                  }
-                >
-                  <Text
-                    style={[
-                      styles.filterChipText,
-                      selectedEngines.includes("off") &&
-                        styles.filterChipTextActive,
-                    ]}
-                  >
-                    Engine OFF
-                  </Text>
-                </TouchableOpacity>
+                    <Text
+                      style={[
+                        styles.filterChipText,
+                        (opt.key === "all"
+                          ? selectedEngines.length === 0
+                          : selectedEngines.includes(opt.key)) &&
+                          styles.filterChipTextActive,
+                      ]}
+                    >
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
               </View>
-
               <Text style={[styles.filterSectionTitle, { marginTop: 20 }]}>
                 Range Suhu
               </Text>
@@ -831,7 +912,7 @@ window.panTo = function(lat, lng){ if(lat && lng){ map.setView([lat, lng], 16, {
                         styles.filterChipTextActive,
                     ]}
                   >
-                    &gt; -15°C
+                    {"< -15°C"}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -850,11 +931,11 @@ window.panTo = function(lat, lng){ if(lat && lng){ map.setView([lat, lng], 16, {
                         styles.filterChipTextActive,
                     ]}
                   >
-                      0°C s/d -15°C
+                    -14°C ~ -1°C
                   </Text>
                 </TouchableOpacity>
               </View>
-              <View style={[styles.filterOptionsRow, { marginTop: 10 }]}>
+              <View style={[styles.filterOptionsRow, { marginTop: 8 }]}>
                 <TouchableOpacity
                   style={[
                     styles.filterChip,
@@ -871,7 +952,7 @@ window.panTo = function(lat, lng){ if(lat && lng){ map.setView([lat, lng], 16, {
                         styles.filterChipTextActive,
                     ]}
                   >
-                    0°C s/d 15°C
+                    0°C ~ 10°C
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -890,12 +971,11 @@ window.panTo = function(lat, lng){ if(lat && lng){ map.setView([lat, lng], 16, {
                         styles.filterChipTextActive,
                     ]}
                   >
-                    &gt; 15°C
+                    {"> 10°C"}
                   </Text>
                 </TouchableOpacity>
               </View>
             </ScrollView>
-
             <TouchableOpacity
               style={styles.resetButton}
               onPress={() => {
@@ -903,6 +983,7 @@ window.panTo = function(lat, lng){ if(lat && lng){ map.setView([lat, lng], 16, {
                 setSelectedTemps([]);
               }}
             >
+              <Feather name="rotate-ccw" size={13} color="white" />
               <Text style={styles.resetButtonText}>Reset Filter</Text>
             </TouchableOpacity>
           </View>
@@ -915,7 +996,113 @@ window.panTo = function(lat, lng){ if(lat && lng){ map.setView([lat, lng], 16, {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F3F4F6" },
   textDark: { color: "#111827" },
-  dashboardContainer: { flex: 1 },
+  dashboardContainer: { flex: 1, backgroundColor: "#F3F4F6" },
+  navbar: {
+    paddingTop: 50,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "white",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+    elevation: 1,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 0.5 },
+    shadowOpacity: 0.04,
+    shadowRadius: 1,
+    zIndex: 20,
+  },
+  burgerBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: "#F9FAFB",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#F3F4F6",
+  },
+  vehicleSelectorContainer: { flex: 1, marginHorizontal: 8 },
+  vehicleSelectorBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F9FAFB",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    gap: 6,
+  },
+  vehicleSelectorText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#374151",
+  },
+  filterBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: "#F9FAFB",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#F3F4F6",
+  },
+  filterBtnActive: { backgroundColor: "#2563EB", borderColor: "#2563EB" },
+  vehicleDropdown: {
+    position: "absolute",
+    top: 45,
+    left: 10,
+    right: 10,
+    backgroundColor: "white",
+    borderRadius: 12,
+    elevation: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    zIndex: 25,
+    maxHeight: 340,
+    borderWidth: 1,
+    borderColor: "#F3F4F6",
+  },
+  searchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+    gap: 6,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 12,
+    color: "#111827",
+    paddingVertical: 0,
+    height: 18,
+  },
+  dropdownList: { maxHeight: 280 },
+  dropdownItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F9FAFB",
+    gap: 8,
+  },
+  dropdownItemSelected: { backgroundColor: "#EFF6FF" },
+  engineDot: { width: 7, height: 7, borderRadius: 4 },
+  dropdownItemContent: { flex: 1 },
+  dropdownItemTitle: { fontSize: 12, fontWeight: "500", color: "#374151" },
+  dropdownItemTitleSelected: { color: "#2563EB", fontWeight: "600" },
+  dropdownItemSub: { fontSize: 10, color: "#D1D5DB", marginTop: 1 },
+  emptyDropdown: { padding: 24, alignItems: "center", gap: 6 },
+  emptyDropdownText: { color: "#D1D5DB", fontSize: 12 },
   mapWrapper: { backgroundColor: "#E5E7EB", overflow: "hidden" },
   mapWrapperFull: { flex: 1 },
   mapWrapperSmall: { flex: 0.7 },
@@ -928,34 +1115,16 @@ const styles = StyleSheet.create({
     bottom: 0,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#fff",
+    backgroundColor: "#FAFAFA",
   },
-
-  floatingButtonsContainer: {
+  popupDismissArea: {
     position: "absolute",
-    top: 50,
-    left: 15,
-    zIndex: 10,
-    alignItems: "center",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: "42%",
+    zIndex: 14,
   },
-  floatingMenuBtn: {
-    width: 45,
-    height: 45,
-    borderRadius: 25,
-    backgroundColor: "rgba(255, 255, 255, 0.95)",
-    justifyContent: "center",
-    alignItems: "center",
-    elevation: 5,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
-  filterActiveBtn: {
-    backgroundColor: "#2563EB",
-  },
-  floatingMenuIcon: { color: "#111827", fontSize: 24, fontWeight: "bold" },
-
   bottomPopupContainer: {
     position: "absolute",
     bottom: 0,
@@ -963,54 +1132,84 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 15,
     backgroundColor: "white",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: "55%",
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    maxHeight: "42%",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
     elevation: 10,
   },
-  dropdownContainer: { borderBottomWidth: 1, borderBottomColor: "#F3F4F6" },
-  dropdownButton: { padding: 14, flexDirection: "row", alignItems: "center" },
-  dropdownText: { fontSize: 16, fontWeight: "700", color: "#111827" },
-  engineBadge: { fontSize: 12, fontWeight: "600", marginTop: 2 },
-  dropdownList: { maxHeight: 150, borderTopWidth: 1, borderColor: "#eee" },
-  dropdownItem: {
-    padding: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
+  popupHandle: { alignItems: "center", paddingTop: 8, paddingBottom: 4 },
+  popupHandleBar: {
+    width: 36,
+    height: 3.5,
+    borderRadius: 2,
+    backgroundColor: "#E5E7EB",
   },
-  dropdownItemTitle: { fontSize: 14, fontWeight: "600", color: "#111827" },
-  dropdownItemSub: { fontSize: 11, color: "#6B7280", marginTop: 2 },
-
-  popupScroll: { paddingHorizontal: 15 },
-  popupContent: { paddingVertical: 15 },
+  popupScroll: { paddingHorizontal: 14 },
+  popupContent: { paddingBottom: 16 },
   popupHeader: { marginBottom: 10 },
-  popupTitle: { fontSize: 18, fontWeight: "bold", color: "#111827" },
-  popupSub: { fontSize: 12, color: "#6B7280", marginTop: 2 },
+  popupTitleContainer: { flexDirection: "row", alignItems: "center", gap: 8 },
+  popupEngineIndicator: { width: 8, height: 8, borderRadius: 4 },
+  popupTitle: { fontSize: 15, fontWeight: "700", color: "#111827" },
+  popupSub: { fontSize: 11, color: "#D1D5DB", marginTop: 1 },
   popupDetails: {
     borderTopWidth: 1,
     borderTopColor: "#F3F4F6",
     paddingTop: 10,
   },
-  detailRow: {
+  detailGrid2x2: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 8,
+    flexWrap: "wrap",
+    gap: 0,
+    borderRadius: 12,
+    overflow: "hidden",
+    backgroundColor: "#F9FAFB",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  detailCard: {
+    width: "50%",
+    padding: 10,
+    backgroundColor: "#F9FAFB",
     alignItems: "center",
+    justifyContent: "center",
+    gap: 2,
   },
-  detailLabel: { fontSize: 13, color: "#6B7280", flex: 1 },
-  detailValue: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#111827",
-    flex: 2,
-    textAlign: "right",
+  detailCardTopLeft: {
+    borderRightWidth: 0.5,
+    borderRightColor: "#E5E7EB",
+    borderBottomWidth: 0.5,
+    borderBottomColor: "#E5E7EB",
   },
-  separatorLine: { height: 1, backgroundColor: "#F3F4F6", marginVertical: 8 },
-
+  detailCardTopRight: { borderBottomWidth: 0.5, borderBottomColor: "#E5E7EB" },
+  detailCardBottomLeft: { borderRightWidth: 0.5, borderRightColor: "#E5E7EB" },
+  detailCardBottomRight: {},
+  detailLabel: { fontSize: 10, color: "#D1D5DB", marginTop: 1 },
+  detailValue: { fontSize: 13, fontWeight: "600", color: "#111827" },
+  locationInfo: {
+    marginTop: 12,
+    backgroundColor: "#F9FAFB",
+    borderRadius: 10,
+    padding: 10,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  locationRow: { flexDirection: "row", alignItems: "flex-start", gap: 6 },
+  locationText: { flex: 1, fontSize: 12, color: "#374151", lineHeight: 16 },
+  speedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 2,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
+  },
+  speedText: { fontSize: 15, fontWeight: "700", color: "#2563EB" },
   tableWrapperLandscape: {
     flex: 0.3,
     backgroundColor: "#FFFFFF",
@@ -1020,31 +1219,31 @@ const styles = StyleSheet.create({
   tableWrapperPortrait: {
     height: "30%",
     backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
   },
-  tableListContent: { paddingVertical: 5, paddingBottom: 20 },
+  tableListContent: { paddingVertical: 4, paddingBottom: 16 },
   tableRow: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 12,
+    padding: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
-    justifyContent: "space-between",
-    marginHorizontal: 5,
+    borderBottomColor: "#F9FAFB",
+    marginHorizontal: 6,
     borderRadius: 8,
-    marginBottom: 5,
+    marginBottom: 3,
     backgroundColor: "#FFFFFF",
   },
   tableRowSelected: {
     backgroundColor: "#EFF6FF",
     borderWidth: 1,
-    borderColor: "#BFDBFE",
+    borderColor: "#DBEAFE",
   },
-  tableCellMain: { flex: 1, marginRight: 5 },
-  tableCellTitle: { fontSize: 13, fontWeight: "600" },
-  tableCellSub: { color: "#6B7280", fontSize: 11, marginTop: 1 },
-
+  tableEngineDot: { width: 7, height: 7, borderRadius: 4, marginRight: 10 },
+  tableCellMain: { flex: 1 },
+  tableCellTitle: { fontSize: 12, fontWeight: "600" },
+  tableCellSub: { color: "#D1D5DB", fontSize: 10, marginTop: 1 },
+  tableSpeed: { fontSize: 11, color: "#9CA3AF", fontWeight: "500" },
   placeholderContainer: {
     flex: 1,
     justifyContent: "center",
@@ -1060,61 +1259,62 @@ const styles = StyleSheet.create({
     backgroundColor: "#F3F4F6",
   },
   emptyText: {
-    color: "#9CA3AF",
+    color: "#D1D5DB",
     textAlign: "center",
-    marginTop: 20,
-    fontSize: 12,
+    marginTop: 16,
+    fontSize: 11,
   },
-
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: "rgba(0,0,0,0.4)",
     justifyContent: "center",
     alignItems: "center",
   },
   filterModalContent: {
-    width: "85%",
+    width: "88%",
     backgroundColor: "white",
-    borderRadius: 20,
-    padding: 20,
-    maxHeight: "80%",
+    borderRadius: 18,
+    padding: 18,
+    maxHeight: "72%",
   },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 20,
+    marginBottom: 16,
   },
-  modalTitle: { fontSize: 18, fontWeight: "bold", color: "#111827" },
-
+  modalTitle: { fontSize: 15, fontWeight: "700", color: "#111827" },
   filterSectionTitle: {
-    fontSize: 14,
+    fontSize: 11,
     fontWeight: "600",
-    color: "#374151",
-    marginBottom: 10,
+    color: "#9CA3AF",
+    marginBottom: 8,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
-  filterOptionsRow: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-
+  filterOptionsRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   filterChip: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 20,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: "#D1D5DB",
+    borderColor: "#E5E7EB",
     backgroundColor: "#F9FAFB",
   },
   filterChipActive: { backgroundColor: "#2563EB", borderColor: "#2563EB" },
-  filterChipText: { color: "#374151", fontSize: 13, fontWeight: "500" },
+  filterChipText: { color: "#9CA3AF", fontSize: 11, fontWeight: "500" },
   filterChipTextActive: { color: "white" },
-
   resetButton: {
-    marginTop: 20,
+    marginTop: 16,
     backgroundColor: "#EF4444",
-    paddingVertical: 12,
+    paddingVertical: 10,
     borderRadius: 10,
     alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 6,
   },
-  resetButtonText: { color: "white", fontWeight: "bold", fontSize: 14 },
+  resetButtonText: { color: "white", fontWeight: "600", fontSize: 12 },
 });
 
 export default HomeScreen;

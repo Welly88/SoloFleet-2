@@ -11,9 +11,10 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { Image } from "react-native";
 
 const { width } = Dimensions.get("window");
-const SIDEBAR_WIDTH = width * 0.75;
+const SIDEBAR_WIDTH = Math.min(width * 0.60, 300);
 
 interface SidebarProps {
   visible: boolean;
@@ -78,8 +79,6 @@ const Sidebar: React.FC<SidebarProps> = ({
     if (isLogout) {
       onLogout();
     } else if (route) {
-      // FIX: Gunakan router.push agar halaman sebelumnya (Home) tetap ada di stack
-      // Cek jika sudah di Home dan klik Home lagi, jangan push
       if (route === "/HomeScreen" && activeMenu === "dashboard") {
         onClose();
         return;
@@ -109,7 +108,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         onPress={() => handleMenuPress(id, route, isLogout)}
         activeOpacity={0.7}
       >
-        <Ionicons name={iconName} size={22} color={color} style={styles.menuIcon} />
+        <Ionicons name={iconName} size={20} color={color} style={styles.menuIcon} />
         <Text style={[styles.menuLabel, { color, fontWeight: isActive ? "700" : "500" }]}>
           {label}
         </Text>
@@ -134,37 +133,57 @@ const Sidebar: React.FC<SidebarProps> = ({
       </TouchableWithoutFeedback>
 
       <Animated.View style={[styles.sidebarContainer, { transform: [{ translateX: slideAnim }] }]}>
+        {/* ── Header ── */}
         <View style={styles.headerSidebar}>
-          <Ionicons name="cube-outline" size={48} color="#2563EB" />
-          <Text style={styles.appName}>Development</Text>
-          <Text style={styles.appSub}>Version 1.0.0</Text>
+           <Image
+    source={require("../assets/images/solofleet.jpeg")}
+    style={styles.logo}
+  />
         </View>
 
+        {/* ── Menu List (scrollable area) ── */}
+                  <View style={styles.footerSeparator} />
         <View style={styles.menuList}>
           {renderMenuItem("dashboard", "Home Page", "home", false, "/HomeScreen")}
+                        {renderMenuItem("dailyReport", "Daily Report", "calendar", false, "/DailyReportScreen")}
+              {renderMenuItem("intervention", "Intervention", "warning", false, "/InterventionScreen")}
+              {renderMenuItem("analytic", "DMS Analytic", "bar-chart", false, "/DmsAnalyticScreen")}
+              {renderMenuItem("feature", "Feature", "grid", false, "/FeatureScreen")}
 
-          <TouchableOpacity style={styles.menuItem} onPress={() => setOpenReport(!openReport)}>
-            <Ionicons name="document-text" size={22} color="#374151" style={styles.menuIcon} />
+          {/* <TouchableOpacity style={styles.menuItem} onPress={() => setOpenReport(!openReport)}>
+            <Ionicons name="document-text" size={20} color="#374151" style={styles.menuIcon} />
             <Text style={styles.menuLabel}>Report</Text>
             <Ionicons
               name={openReport ? "chevron-up" : "chevron-down"}
-              size={18}
+              size={16}
               color="#9CA3AF"
               style={{ marginLeft: "auto" }}
             />
-          </TouchableOpacity>
+          </TouchableOpacity> */}
 
-          {openReport && (
+          
+
+          {/* {openReport && (
             <View style={styles.subMenu}>
-              {renderMenuItem("dailyReport", "Daily Report", "calendar", false, "/DailyReportScreen")}
-              {renderMenuItem("intervention", "Intervention Report", "warning", false, "/InterventionScreen")}
-              {renderMenuItem("analytic", "DMS Analytic", "bar-chart", false, "/DmsAnalyticScreen")}
-              {renderMenuItem("feature", "Feature", "grid", false, "/FeatureScreen")}
-            </View>
-          )}
 
-          <View style={styles.separator} />
-          {renderMenuItem("logout", "Keluar", "log-out", true)}
+            </View>
+          )} */}
+        </View>
+
+        {/* ── Footer (Keluar) ── */}
+        <View style={styles.footerSidebar}>
+          {/* <View style={styles.footerSeparator} /> */}
+          <TouchableOpacity
+            style={styles.logoutButton}
+            onPress={() => handleMenuPress("logout", undefined, true)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="log-out-outline" size={20} color="#DC2626" style={styles.menuIcon} />
+            <Text style={styles.logoutLabel}>Keluar</Text>
+          </TouchableOpacity>
+          <View style={styles.footerSeparator} />
+          <Text style={styles.footerVersion}>Solo Fleet</Text>
+          <Text style={styles.footerVersion}>V 1.0.0</Text>
         </View>
       </Animated.View>
     </View>
@@ -172,22 +191,117 @@ const Sidebar: React.FC<SidebarProps> = ({
 };
 
 const styles = StyleSheet.create({
-  overlay: { position: "absolute", width: "100%", height: "100%", zIndex: 999, flexDirection: "row" },
-  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)" },
-  sidebarContainer: {
-    position: "absolute", width: SIDEBAR_WIDTH, height: "100%", backgroundColor: "#FFF", elevation: 20,
-    shadowColor: "#000", shadowOffset: { width: 2, height: 0 }, shadowOpacity: 0.25, shadowRadius: 10,
+  overlay: {
+    position: "absolute",
+    width: "100%",
+    height: "100%",
+    zIndex: 999,
+    flexDirection: "row",
   },
-  headerSidebar: { padding: 24, borderBottomWidth: 1, borderBottomColor: "#F3F4F6", alignItems: "center", paddingTop: 40 },
-  appName: { fontSize: 20, fontWeight: "700", marginTop: 10, color: "#111827" },
-  appSub: { color: "#9CA3AF", marginTop: 4, fontSize: 12 },
-  menuList: { padding: 12, flex: 1 },
-  menuItem: { flexDirection: "row", alignItems: "center", padding: 14, borderRadius: 12, marginBottom: 4 },
-  menuItemActive: { backgroundColor: "#EFF6FF" },
-  menuIcon: { marginRight: 14 },
-  menuLabel: { fontSize: 15, color: "#374151" },
-  subMenu: { marginLeft: 12, borderLeftWidth: 1.5, borderColor: "#E5E7EB", paddingLeft: 8, marginTop: 4, marginBottom: 4 },
-  separator: { height: 1, backgroundColor: "#F3F4F6", marginVertical: 16 },
+  backdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+  },
+  sidebarContainer: {
+    position: "absolute",
+    width: SIDEBAR_WIDTH,
+    height: "100%",
+    backgroundColor: "#FFF",
+    elevation: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 2, height: 0 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    // penting: biar footer nempel bawah
+    flexDirection: "column",
+  },
+
+  /* ── Header ── */
+headerSidebar: {
+  paddingTop: 16,
+  paddingBottom: 0,
+  paddingHorizontal: 16,
+  alignItems: "center",
+},
+  appName: {
+    fontSize: 15,
+    fontWeight: "700",
+    marginTop: 8,
+    color: "#111827",
+  },
+  appSub: {
+    color: "#9CA3AF",
+    marginTop: 2,
+    fontSize: 11,
+  },
+
+  /* ── Menu ── */
+menuList: {
+  flex: 1,
+  paddingHorizontal: 8,
+  paddingTop: 0,
+},
+  menuItem: {
+  flexDirection: "row",
+  alignItems: "center",
+  paddingVertical: 10,
+  paddingHorizontal: 11,
+  borderRadius: 10,
+  marginBottom: 2,
+},
+ logo: {
+  width: 200,
+  height: 200,
+  resizeMode: "contain",
+},
+  menuItemActive: {
+    backgroundColor: "#EFF6FF",
+  },
+  menuIcon: {
+    marginRight: 12,
+  },
+  menuLabel: {
+    fontSize: 12,
+    color: "#374151",
+    flexShrink: 1,
+  },
+  subMenu: {
+    marginLeft: 10,
+    borderLeftWidth: 1.5,
+    borderColor: "#E5E7EB",
+    paddingLeft: 8,
+    marginTop: 2,
+    marginBottom: 2,
+  },
+
+  /* ── Footer ── */
+  footerSidebar: {
+    paddingBottom: 28,
+    paddingTop: 4,
+    paddingHorizontal: 12,
+  },
+  footerSeparator: {
+    height: 1,
+    backgroundColor: "#E5E7EB",
+    marginBottom: 8,
+  },
+  logoutButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 11,
+    borderRadius: 10,
+  },
+  logoutLabel: {
+    fontSize: 14,
+    color: "#DC2626",
+    fontWeight: "600",
+  },
+  footerVersion: {
+    fontSize: 10,
+    color: "#D1D5DB",
+    textAlign: "center",
+    marginTop: 12,
+  },
 });
 
 export default Sidebar;
